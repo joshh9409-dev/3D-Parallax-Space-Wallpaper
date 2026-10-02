@@ -9,6 +9,9 @@ import android.opengl.EGL14;
 import android.opengl.GLES20;
 import android.service.wallpaper.WallpaperService;
 import android.view.SurfaceHolder;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
 
 public class ParallaxRenderer implements SensorEventListener {
     private final Context context;
@@ -28,6 +31,8 @@ public class ParallaxRenderer implements SensorEventListener {
     private android.opengl.EGLSurface eglSurface;
     private int program;
     private int uResolution,uTime,uCam,uPage;
+    private int positionLocation;
+    private FloatBuffer vertexBuffer;
 
     public ParallaxRenderer(Context c){
         context=c;
@@ -106,7 +111,14 @@ public class ParallaxRenderer implements SensorEventListener {
         eglSurface=EGL14.eglCreateWindowSurface(display,configs[0],holder.getSurface(),new int[]{EGL14.EGL_NONE},0);
         EGL14.eglMakeCurrent(display,eglSurface,eglSurface,eglContext);
 
+        float[] vertices={-1f,-1f, 3f,-1f, -1f,3f};
+        vertexBuffer=ByteBuffer.allocateDirect(vertices.length*4)
+                .order(ByteOrder.nativeOrder()).asFloatBuffer();
+        vertexBuffer.put(vertices).position(0);
+
         program=link(VERTEX,FRAGMENT);
+        positionLocation=GLES20.glGetAttribLocation(program,"aPosition");
+        if(positionLocation<0) throw new IllegalStateException("aPosition attribute missing");
         uResolution=GLES20.glGetUniformLocation(program,"uResolution");
         uTime=GLES20.glGetUniformLocation(program,"uTime");
         uCam=GLES20.glGetUniformLocation(program,"uCam");
@@ -120,6 +132,9 @@ public class ParallaxRenderer implements SensorEventListener {
         GLES20.glUniform1f(uTime,time);
         GLES20.glUniform2f(uCam,camX,camY);
         GLES20.glUniform2f(uPage,launcherX,launcherY);
+        vertexBuffer.position(0);
+        GLES20.glEnableVertexAttribArray(positionLocation);
+        GLES20.glVertexAttribPointer(positionLocation,2,GLES20.GL_FLOAT,false,0,vertexBuffer);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLES,0,3);
     }
 
@@ -136,10 +151,18 @@ public class ParallaxRenderer implements SensorEventListener {
     private int link(String vs,String fs){
         int v=GLES20.glCreateShader(GLES20.GL_VERTEX_SHADER);
         GLES20.glShaderSource(v,vs); GLES20.glCompileShader(v);
+        int[] ok=new int[1];
+        GLES20.glGetShaderiv(v,GLES20.GL_COMPILE_STATUS,ok,0);
+        if(ok[0]==0) throw new IllegalStateException("Vertex shader: "+GLES20.glGetShaderInfoLog(v));
         int f=GLES20.glCreateShader(GLES20.GL_FRAGMENT_SHADER);
         GLES20.glShaderSource(f,fs); GLES20.glCompileShader(f);
+        GLES20.glGetShaderiv(f,GLES20.GL_COMPILE_STATUS,ok,0);
+        if(ok[0]==0) throw new IllegalStateException("Fragment shader: "+GLES20.glGetShaderInfoLog(f));
         int p=GLES20.glCreateProgram();
         GLES20.glAttachShader(p,v); GLES20.glAttachShader(p,f); GLES20.glLinkProgram(p);
+        GLES20.glGetProgramiv(p,GLES20.GL_LINK_STATUS,ok,0);
+        if(ok[0]==0) throw new IllegalStateException("Program link: "+GLES20.glGetProgramInfoLog(p));
+        GLES20.glDeleteShader(v); GLES20.glDeleteShader(f);
         return p;
     }
 
@@ -154,7 +177,7 @@ public class ParallaxRenderer implements SensorEventListener {
     @Override public void onAccuracyChanged(Sensor s,int a){}
 
     private static final String VERTEX =
-        "attribute vec4 a; void main(){gl_Position=a;}";
+        "attribute vec2 aPosition; void main(){gl_Position=vec4(aPosition,0.0,1.0);}";
 
     /*
       A single real-time GPU scene. The scene deliberately contains depth-separated
