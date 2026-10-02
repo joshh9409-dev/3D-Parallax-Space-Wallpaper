@@ -1,0 +1,21 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-feature android:name="android.software.live_wallpaper" android:required="true"/>
+    <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false"/>
+
+    <application
+        android:theme="@style/AppTheme"
+        android:label="3D Parallax Space">
+        <service
+            android:name=".ParallaxWallpaperService"
+            android:exported="true"
+            android:label="3D Parallax Space"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/wallpaper"/>
+        </service>
+    </application>
+</manifest>
